@@ -1,16 +1,12 @@
+import { IsEmail, IsNotEmpty, Max, Min, validate } from "class-validator";
 interface ProjectType {
     title: string,
     description: string,
     people: number,
     id: string
 }
-enum ValidationKey {
-    REQUIRED, MIN, MAX
-}
-interface Step {
-    prop: ValidationKey,
-    param?: string | number
-}
+
+
 enum TargetTypes {
     ACTIVE = "ACTIVE", PASSIVE = "PASSIVE"
 }
@@ -18,77 +14,13 @@ interface DatasetData {
     target: TargetTypes,
     id: string
 }
-const validations: any = {}
 
 
 
 
-function addValidation(target: any, key: string, step: Step) {
-    const targetName = target.constructor.name as string;
-    if (!validations[targetName]) validations[targetName] = { ...validations[targetName], [key]: [step] }
-    else if (!validations[targetName][key]) validations[targetName][key] = [step]
-    else {
-        validations[targetName][key].push(step)
-    }
-}
-function Required(target: any, key: string) {
-    addValidation(target, key, {
-        prop: ValidationKey.REQUIRED
-    })
-}
-function MinValue(min: number) {
-    return function (target: any, key: string) {
-        addValidation(target, key, {
-            prop: ValidationKey.MIN,
-            param: min
-        })
-    }
-}
-function MaxValue(max: number) {
-    return function (target: any, key: string) {
-        addValidation(target, key, {
-            prop: ValidationKey.MAX,
-            param: max
-        })
-    }
-}
 interface MyError {
     prop: string,
     description: string
-}
-function Validate(target: any, _eventName: string, descriptor: PropertyDescriptor) {
-    const newDescriptor: PropertyDescriptor = {
-        get(this: any) {
-            const results: MyError[] = [];
-            const currentValidations = validations[target.constructor.name]
-            for (const key in currentValidations) {
-                for (const step of (currentValidations[key] as Step[])) {
-                    switch (step.prop) {
-                        case ValidationKey.REQUIRED:
-                            if (!this[key]) results.push({
-                                "description": "Please enter a value",
-                                "prop": key
-                            })
-                            break;
-                        case ValidationKey.MIN:
-                            if (this[key] < step.prop) results.push({
-                                "description": `${key} must be greater than ${step.param}`,
-                                "prop": key
-                            })
-                            break;
-                        case ValidationKey.MAX:
-                            if (this[key] > step.prop) results.push({
-                                "description": `${key} must be less than ${step.param}`,
-                                "prop": key
-                            })
-                            break;
-                    }
-                }
-            }
-            return results.length ? () => results : descriptor.value
-        },
-    }
-    return newDescriptor
 }
 
 
@@ -130,7 +62,6 @@ if ("content" in document.createElement("template")) {
                 const isTargetActive = target.id == "active-list"
                 const targetList = e.dataTransfer!.getData("target") as string
                 const data = JSON.parse(targetList) as DatasetData;
-                const parent = target.parentElement! as HTMLUListElement;
                 let targetParent: HTMLUListElement | undefined;
 
                 if (data.target == TargetTypes.ACTIVE && isTargetActive) {
@@ -181,11 +112,11 @@ if ("content" in document.createElement("template")) {
 
 
     class Project implements ProjectType {
-        @Required
+        @IsNotEmpty() @IsEmail()
         title: string;
-        @Required
+        @IsNotEmpty()
         description: string;
-        @Required @MinValue(1) @MaxValue(20)
+        @IsNotEmpty() @Min(1) @Max(21)
         people: number;
 
         id: string
@@ -197,7 +128,6 @@ if ("content" in document.createElement("template")) {
         }
 
 
-        @Validate
         mount(): MyError[] | void {
             const template = ProjectManager.getInstance();
             template.createProject(this)
@@ -205,14 +135,23 @@ if ("content" in document.createElement("template")) {
     }
 
 
-    form.addEventListener("submit", (e: SubmitEvent) => {
-        e.preventDefault();
-        const project = new Project(title.value, description.value, +people.value)
-        const result = project.mount();
-        if (result) {
-            for (const message of result) {
-                alert(message.description + " " + message.prop)
+    form.addEventListener("submit", async (e: SubmitEvent) => {
+        try {
+            e.preventDefault();
+            const project = new Project(title.value, description.value, +people.value)
+            const errors = await validate(project);
+            if (errors.length) {
+                for (const err of errors) {
+                    console.log(err)
+                }
+            } else {
+                project.mount();
+
             }
+
+
+        } catch (err) {
+            console.log(err)
         }
 
     })
